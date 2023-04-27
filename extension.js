@@ -215,18 +215,9 @@ function checkPage(pageUid, pageTitle, templateUID) {
 }
 
 async function printTree(tree, pageUid) {
-  //check if there is existing content on the page
   let order = await window.roamAlphaAPI.q(`[:find ?c :where [?e :block/children ?c] [?e :block/uid "${pageUid}"]]`).length;
-
-  if (tree.hasOwnProperty('children')) {
-    let newUid = roamAlphaAPI.util.generateUID();
-    window.roamAlphaAPI.createBlock(
-      {
-        "location": { "parent-uid": pageUid, "order": order },
-        "block": { "string": "", uid: newUid, open: true }
-      }
-    );
-
+  
+  if (tree.hasOwnProperty('children') && tree.children.length > 0) { 
     for (var i = 0; i < tree.children.length; i++) {
       let newerUid = roamAlphaAPI.util.generateUID();
       let blockText = tree.children[i].text;
@@ -236,76 +227,13 @@ async function printTree(tree, pageUid) {
           "block": { "string": blockText, uid: newerUid, open: true, "heading": tree.children[i].heading }
         }
       );
-
-      if (tree.children[i].hasOwnProperty('children')) {
-        for (var j = 0; j < tree.children[i].children.length; j++) {
-          let newerUid1 = roamAlphaAPI.util.generateUID();
-          window.roamAlphaAPI.createBlock(
-            {
-              "location": { "parent-uid": newerUid, "order": tree.children[i].children[j].order },
-              "block": { "string": tree.children[i].children[j].text, uid: newerUid1, "heading": tree.children[i].children[j].heading }
-            }
-          );
-          if (tree.children[i].children[j].hasOwnProperty('children')) {
-            for (var k = 0; k < tree.children[i].children[j].children.length; k++) {
-              let newerUid2 = roamAlphaAPI.util.generateUID();
-              window.roamAlphaAPI.createBlock(
-                {
-                  "location": { "parent-uid": newerUid1, "order": tree.children[i].children[j].children[k].order },
-                  "block": { "string": tree.children[i].children[j].children[k].text, uid: newerUid2, "heading": tree.children[i].children[j].children[k].heading }
-                }
-              );
-              if (tree.children[i].children[j].children[k].hasOwnProperty('children')) {
-                for (var m = 0; m < tree.children[i].children[j].children[k].children.length; m++) {
-                  let newerUid3 = roamAlphaAPI.util.generateUID();
-                  window.roamAlphaAPI.createBlock(
-                    {
-                      "location": { "parent-uid": newerUid2, "order": tree.children[i].children[j].children[k].children[m].order },
-                      "block": { "string": tree.children[i].children[j].children[k].children[m].text, uid: newerUid3, "heading": tree.children[i].children[j].children[k].children[m].heading }
-                    }
-                  );
-                  if (tree.children[i].children[j].children[k].children[m].hasOwnProperty('children')) {
-                    for (var n = 0; n < tree.children[i].children[j].children[k].children[m].children.length; n++) {
-                      let newerUid4 = roamAlphaAPI.util.generateUID();
-                      window.roamAlphaAPI.createBlock(
-                        {
-                          "location": { "parent-uid": newerUid3, "order": tree.children[i].children[j].children[k].children[m].children[n].order },
-                          "block": { "string": tree.children[i].children[j].children[k].children[m].children[n].text, uid: newerUid4, "heading": tree.children[i].children[j].children[k].children[m].children[n].heading }
-                        }
-                      );
-                      if (tree.children[i].children[j].children[k].children[m].children[n].hasOwnProperty('children')) {
-                        for (var p = 0; p < tree.children[i].children[j].children[k].children[m].children[n].children.length; p++) {
-                          let newerUid5 = roamAlphaAPI.util.generateUID();
-                          window.roamAlphaAPI.createBlock(
-                            {
-                              "location": { "parent-uid": newerUid4, "order": tree.children[i].children[j].children[k].children[m].children[n].children[p].order },
-                              "block": { "string": tree.children[i].children[j].children[k].children[m].children[n].children[p].text, uid: newerUid5, "heading": tree.children[i].children[j].children[k].children[m].children[n].children[p].heading }
-                            }
-                          );
-                          if (tree.children[i].children[j].children[k].children[m].children[n].children[p].hasOwnProperty('children')) {
-                            for (var q = 0; q < tree.children[i].children[j].children[k].children[m].children[n].children[p].children.length; q++) {
-                              let newerUid6 = roamAlphaAPI.util.generateUID();
-                              window.roamAlphaAPI.createBlock(
-                                {
-                                  "location": { "parent-uid": newerUid5, "order": tree.children[i].children[j].children[k].children[m].children[n].children[p].children[q].order },
-                                  "block": { "string": tree.children[i].children[j].children[k].children[m].children[n].children[p].children[q].text, uid: newerUid6, "heading": tree.children[i].children[j].children[k].children[m].children[n].children[p].children[q].heading }
-                                }
-                              );
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+      if (tree.children[i].hasOwnProperty('children') && tree.children[i].children.length > 0) {
+        printTree(tree.children[i], newerUid);
       }
     }
   }
 }
+
 
 // I think these two helper functions came from either TFTHacker and Roam42, or possibly David Vargas at roamjs.com
 function getTreeByBlockId(blockId) {
@@ -370,3 +298,93 @@ function getTreeByBlockUid(blockUid) {
   )?.[0]?.[0];
   return getTreeByBlockId(blockId);
 };
+
+/*
+if (tree.hasOwnProperty('children')) {
+  let newUid = roamAlphaAPI.util.generateUID();
+  window.roamAlphaAPI.createBlock(
+    {
+      "location": { "parent-uid": pageUid, "order": order },
+      "block": { "string": "", uid: newUid, open: true }
+    }
+  );
+
+  for (var i = 0; i < tree.children.length; i++) {
+    let newerUid = roamAlphaAPI.util.generateUID();
+    let blockText = tree.children[i].text;
+    window.roamAlphaAPI.createBlock(
+      {
+        "location": { "parent-uid": pageUid, "order": order + tree.children[i].order },
+        "block": { "string": blockText, uid: newerUid, open: true, "heading": tree.children[i].heading }
+      }
+    );
+
+    if (tree.children[i].hasOwnProperty('children')) {
+      for (var j = 0; j < tree.children[i].children.length; j++) {
+        let newerUid1 = roamAlphaAPI.util.generateUID();
+        window.roamAlphaAPI.createBlock(
+          {
+            "location": { "parent-uid": newerUid, "order": tree.children[i].children[j].order },
+            "block": { "string": tree.children[i].children[j].text, uid: newerUid1, "heading": tree.children[i].children[j].heading }
+          }
+        );
+        if (tree.children[i].children[j].hasOwnProperty('children')) {
+          for (var k = 0; k < tree.children[i].children[j].children.length; k++) {
+            let newerUid2 = roamAlphaAPI.util.generateUID();
+            window.roamAlphaAPI.createBlock(
+              {
+                "location": { "parent-uid": newerUid1, "order": tree.children[i].children[j].children[k].order },
+                "block": { "string": tree.children[i].children[j].children[k].text, uid: newerUid2, "heading": tree.children[i].children[j].children[k].heading }
+              }
+            );
+            if (tree.children[i].children[j].children[k].hasOwnProperty('children')) {
+              for (var m = 0; m < tree.children[i].children[j].children[k].children.length; m++) {
+                let newerUid3 = roamAlphaAPI.util.generateUID();
+                window.roamAlphaAPI.createBlock(
+                  {
+                    "location": { "parent-uid": newerUid2, "order": tree.children[i].children[j].children[k].children[m].order },
+                    "block": { "string": tree.children[i].children[j].children[k].children[m].text, uid: newerUid3, "heading": tree.children[i].children[j].children[k].children[m].heading }
+                  }
+                );
+                if (tree.children[i].children[j].children[k].children[m].hasOwnProperty('children')) {
+                  for (var n = 0; n < tree.children[i].children[j].children[k].children[m].children.length; n++) {
+                    let newerUid4 = roamAlphaAPI.util.generateUID();
+                    window.roamAlphaAPI.createBlock(
+                      {
+                        "location": { "parent-uid": newerUid3, "order": tree.children[i].children[j].children[k].children[m].children[n].order },
+                        "block": { "string": tree.children[i].children[j].children[k].children[m].children[n].text, uid: newerUid4, "heading": tree.children[i].children[j].children[k].children[m].children[n].heading }
+                      }
+                    );
+                    if (tree.children[i].children[j].children[k].children[m].children[n].hasOwnProperty('children')) {
+                      for (var p = 0; p < tree.children[i].children[j].children[k].children[m].children[n].children.length; p++) {
+                        let newerUid5 = roamAlphaAPI.util.generateUID();
+                        window.roamAlphaAPI.createBlock(
+                          {
+                            "location": { "parent-uid": newerUid4, "order": tree.children[i].children[j].children[k].children[m].children[n].children[p].order },
+                            "block": { "string": tree.children[i].children[j].children[k].children[m].children[n].children[p].text, uid: newerUid5, "heading": tree.children[i].children[j].children[k].children[m].children[n].children[p].heading }
+                          }
+                        );
+                        if (tree.children[i].children[j].children[k].children[m].children[n].children[p].hasOwnProperty('children')) {
+                          for (var q = 0; q < tree.children[i].children[j].children[k].children[m].children[n].children[p].children.length; q++) {
+                            let newerUid6 = roamAlphaAPI.util.generateUID();
+                            window.roamAlphaAPI.createBlock(
+                              {
+                                "location": { "parent-uid": newerUid5, "order": tree.children[i].children[j].children[k].children[m].children[n].children[p].children[q].order },
+                                "block": { "string": tree.children[i].children[j].children[k].children[m].children[n].children[p].children[q].text, uid: newerUid6, "heading": tree.children[i].children[j].children[k].children[m].children[n].children[p].children[q].heading }
+                              }
+                            );
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+*/
