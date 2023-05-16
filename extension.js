@@ -109,8 +109,8 @@ export default {
 
         try { if (checkTomorrowInterval > 0) clearInterval(checkTomorrowInterval) } catch (e) { }
         checkTomorrowInterval = setInterval(async () => {
-                await checkTomorrow()
-            }, 3600000);
+            await checkTomorrow()
+        }, 3600000);
         checkDNP(adnpMode);
 
         // onChange
@@ -138,6 +138,7 @@ export default {
 }
 
 function pullFunction(before, after) {
+    console.info("Pullwatch fired");
     window.roamAlphaAPI.data.removePullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction);
     checkDNP(adnpMode);
 }
@@ -160,9 +161,10 @@ async function checkTomorrow() { // check if tomorrow's DNP exists, and manage p
 
 async function checkDNP(adnpMode) {
     var pageUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
+
     if (!pageUid) {
         var uri = window.location.href;
-        const regex = /^https:\/\/roamresearch.com\/#\/(app|offline)\/\w+$/; //today's DNP
+        const regex = /^https:\/\/(relemma-.+)?roamresearch.com\/(#\/(app|offline)\/\w+)?$/; //today's DNP
         let logPage = document.getElementById("rm-log-container");
         if (uri.match(regex) || logPage) {
             var today = new Date();
@@ -180,51 +182,70 @@ async function checkDNP(adnpMode) {
     var currentYear = currentDate.getFullYear().toString();
     currentDate = currentMonth.padStart(2, "0") + "-" + currentDay.padStart(2, "0") + "-" + currentYear;
     var d = new Date();
-    var dayOfWeek = d.getDay();
+    var dayOfWeek = d.getDay();    
+
+    if (adnpMode == "Daily") {
+        if (dayOfWeek == 0) {
+            if (exAPI.extensionAPI.settings.get("adnp-Sun")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-Sun");
+            }
+        } else if (dayOfWeek == 1) {
+            if (exAPI.extensionAPI.settings.get("adnp-Mon")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-Mon");
+            }
+        } else if (dayOfWeek == 2) {
+            if (exAPI.extensionAPI.settings.get("adnp-Tue")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-Tue");
+            }
+        } else if (dayOfWeek == 3) {
+            if (exAPI.extensionAPI.settings.get("adnp-Wed")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-Wed");
+            }
+        } else if (dayOfWeek == 4) {
+            if (exAPI.extensionAPI.settings.get("adnp-Thu")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-Thu");
+            }
+        } else if (dayOfWeek == 5) {
+            if (exAPI.extensionAPI.settings.get("adnp-Fri")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-Fri");
+            }
+        } else {
+            if (exAPI.extensionAPI.settings.get("adnp-Sat")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-Sat");
+            }
+        }
+    } else if (adnpMode == "Weekday/Weekend") {
+        if (dayOfWeek == 0) { // Sunday
+            if (exAPI.extensionAPI.settings.get("adnp-weekend")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-weekend");
+            }
+        } else if (dayOfWeek == 6) { // Saturday
+            if (exAPI.extensionAPI.settings.get("adnp-weekend")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-weekend");
+            }
+        } else { // weekdays
+            if (exAPI.extensionAPI.settings.get("adnp-weekday")) {
+                templateUID = exAPI.extensionAPI.settings.get("adnp-weekday");
+            }
+        }
+    }
 
     if (pageUid === currentDate) { // we need to paste the template as this is the right page
-        if (adnpMode == "Daily") {
-            if (dayOfWeek == 0) {
-                if (exAPI.extensionAPI.settings.get("adnp-Sun")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-Sun");
-                }
-            } else if (dayOfWeek == 1) {
-                if (exAPI.extensionAPI.settings.get("adnp-Mon")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-Mon");
-                }
-            } else if (dayOfWeek == 2) {
-                if (exAPI.extensionAPI.settings.get("adnp-Tue")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-Tue");
-                }
-            } else if (dayOfWeek == 3) {
-                if (exAPI.extensionAPI.settings.get("adnp-Wed")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-Wed");
-                }
-            } else if (dayOfWeek == 4) {
-                if (exAPI.extensionAPI.settings.get("adnp-Thu")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-Thu");
-                }
-            } else if (dayOfWeek == 5) {
-                if (exAPI.extensionAPI.settings.get("adnp-Fri")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-Fri");
-                }
-            } else {
-                if (exAPI.extensionAPI.settings.get("adnp-Sat")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-Sat");
-                }
-            }
-        } else if (adnpMode == "Weekday/Weekend") {
-            if (dayOfWeek == 0) { // Sunday
-                if (exAPI.extensionAPI.settings.get("adnp-weekend")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-weekend");
-                }
-            } else if (dayOfWeek == 6) { // Saturday
-                if (exAPI.extensionAPI.settings.get("adnp-weekend")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-weekend");
-                }
-            } else { // weekdays
-                if (exAPI.extensionAPI.settings.get("adnp-weekday")) {
-                    templateUID = exAPI.extensionAPI.settings.get("adnp-weekday");
+        if (templateUID == undefined) {
+            alert("Make sure to set the template block reference in Roam Depot settings!");
+        } else {
+            templateUID = templateUID.replace('((', '');
+            templateUID = templateUID.replace('))', '');
+            checkPage(pageUid, pageTitle, templateUID);
+        }
+    } else { // check the sidebar to make sure today's DNP isn't open there
+        var RSwindows = await window.roamAlphaAPI.ui.rightSidebar.getWindows();
+        if (RSwindows) {
+            console.info(RSwindows);
+            for (var i = 0; i < RSwindows.length; i++) {
+                if (RSwindows[i]['page-uid'] == currentDate) {
+                    pageUid = RSwindows[i]['page-uid'].toString();
+                    console.info("found sidebar window for: ", pageUid);
                 }
             }
         }
