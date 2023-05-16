@@ -261,7 +261,7 @@ async function checkPage(pageUid, pageTitle, templateUID) {
 }
 
 async function printTree(tree, pageUid) {
-    let order = await window.roamAlphaAPI.q(`[:find ?c :where [?e :block/children ?c] [?e :block/uid "${pageUid}"]]`).length;
+    let order = await window.roamAlphaAPI.q(`[:find ?c :where [?e :block/children ?c] [?e :block/uid "${pageUid}"]]`)?.length;
 
     if (tree.hasOwnProperty('children') && tree.children.length > 0) {
         for (var i = 0; i < tree.children.length; i++) {
