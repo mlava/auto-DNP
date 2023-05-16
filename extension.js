@@ -138,7 +138,6 @@ export default {
 }
 
 function pullFunction(before, after) {
-    console.info("Pullwatch fired");
     window.roamAlphaAPI.data.removePullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction);
     checkDNP(adnpMode);
 }
@@ -147,15 +146,12 @@ async function checkTomorrow() { // check if tomorrow's DNP exists, and manage p
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     var tomorrowUID = window.roamAlphaAPI.util.dateToPageUid(tomorrow);
-    console.info("Checking to see if page exists: ", tomorrowUID)
     var page = window.roamAlphaAPI.q(` [:find ?e :where [?e :block/uid "${tomorrowUID}"]]`);
     if (page.length < 1) { // no uid for tomorrow yet
         window.roamAlphaAPI.data.addPullWatch("[:create/time]", `[:block/uid "${tomorrowUID}"]`, pullFunction);
         monitorUID = tomorrowUID;
-        console.info("Created a pullWatch for: ", tomorrowUID);
     } else { // removePullWatch as page exists
         window.roamAlphaAPI.data.removePullWatch("[:create/time]", `[:block/uid "${tomorrowUID}"]`, pullFunction);
-        console.info("Deleted a pullWatch for: ", tomorrowUID);
     }
 }
 
@@ -241,11 +237,9 @@ async function checkDNP(adnpMode) {
     } else { // check the sidebar to make sure today's DNP isn't open there
         var RSwindows = await window.roamAlphaAPI.ui.rightSidebar.getWindows();
         if (RSwindows) {
-            console.info(RSwindows);
             for (var i = 0; i < RSwindows.length; i++) {
                 if (RSwindows[i]['page-uid'] == currentDate) {
                     pageUid = RSwindows[i]['page-uid'].toString();
-                    console.info("found sidebar window for: ", pageUid);
                 }
             }
         }
