@@ -114,6 +114,29 @@ export default {
                 extensionAPI.settings.panel.create(config2);
             }
         }
+
+        // command trigger
+        extensionAPI.ui.commandPalette.addCommand({
+            label: "Manually trigger this day's DNP template",
+            callback: async () => {
+                var pageUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
+                if (!pageUid) {
+                    var uri = window.location.href;
+                    const regex = /^https:\/\/(relemma-.+)?roamresearch.com\/(#\/(app|offline)\/\w+)?$/; //today's DNP
+                    let logPage = document.getElementById("rm-log-container");
+                    if (uri.match(regex) || logPage) {
+                        var today = new Date();
+                        var dd = String(today.getDate()).padStart(2, '0');
+                        var mm = String(today.getMonth() + 1).padStart(2, '0');
+                        var yyyy = today.getFullYear();
+                        pageUid = mm + '-' + dd + '-' + yyyy;
+                    }
+                }
+                if (pageUid) {
+                    checkDNP(adnpMode, pageUid);
+                }
+            }
+        });
     },
     onunload: () => {
         window.roamAlphaAPI.data.removePullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction);
@@ -127,76 +150,82 @@ function pullFunction(before, after) {
 
 async function checkDNP(adnpMode, pageUid) {
     var pageTitle = window.roamAlphaAPI.q(`[:find (pull ?p [:node/title]) :where [?p :block/uid "${pageUid}"]]`)?.[0]?.[0]?.title || "";
-    var d = new Date();
-    var dayOfWeek = d.getDay();
-
-    if (adnpMode == "Weekday/Weekend") {
-        if (dayOfWeek == 0) { // Sunday
-            if (exAPI.extensionAPI.settings.get("adnp-weekend")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-weekend");
-            }
-        } else if (dayOfWeek == 6) { // Saturday
-            if (exAPI.extensionAPI.settings.get("adnp-weekend")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-weekend");
-            }
-        } else { // weekdays
-            if (exAPI.extensionAPI.settings.get("adnp-weekday")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-weekday");
-            }
-        }
-    } else {
-        if (dayOfWeek == 0) {
-            if (exAPI.extensionAPI.settings.get("adnp-Sun")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-Sun");
-            }
-        } else if (dayOfWeek == 1) {
-            if (exAPI.extensionAPI.settings.get("adnp-Mon")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-Mon");
-            }
-        } else if (dayOfWeek == 2) {
-            if (exAPI.extensionAPI.settings.get("adnp-Tue")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-Tue");
-            }
-        } else if (dayOfWeek == 3) {
-            if (exAPI.extensionAPI.settings.get("adnp-Wed")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-Wed");
-            }
-        } else if (dayOfWeek == 4) {
-            if (exAPI.extensionAPI.settings.get("adnp-Thu")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-Thu");
-            }
-        } else if (dayOfWeek == 5) {
-            if (exAPI.extensionAPI.settings.get("adnp-Fri")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-Fri");
+    var date = await window.roamAlphaAPI.util.pageTitleToDate(pageTitle);
+    
+    if (date != null) {
+        var d = new Date(date);
+        var dayOfWeek = d.getDay();
+    
+        if (adnpMode == "Weekday/Weekend") {
+            if (dayOfWeek == 0) { // Sunday
+                if (exAPI.extensionAPI.settings.get("adnp-weekend")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-weekend");
+                }
+            } else if (dayOfWeek == 6) { // Saturday
+                if (exAPI.extensionAPI.settings.get("adnp-weekend")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-weekend");
+                }
+            } else { // weekdays
+                if (exAPI.extensionAPI.settings.get("adnp-weekday")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-weekday");
+                }
             }
         } else {
-            if (exAPI.extensionAPI.settings.get("adnp-Sat")) {
-                templateUID = exAPI.extensionAPI.settings.get("adnp-Sat");
+            if (dayOfWeek == 0) {
+                if (exAPI.extensionAPI.settings.get("adnp-Sun")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-Sun");
+                }
+            } else if (dayOfWeek == 1) {
+                if (exAPI.extensionAPI.settings.get("adnp-Mon")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-Mon");
+                }
+            } else if (dayOfWeek == 2) {
+                if (exAPI.extensionAPI.settings.get("adnp-Tue")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-Tue");
+                }
+            } else if (dayOfWeek == 3) {
+                if (exAPI.extensionAPI.settings.get("adnp-Wed")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-Wed");
+                }
+            } else if (dayOfWeek == 4) {
+                if (exAPI.extensionAPI.settings.get("adnp-Thu")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-Thu");
+                }
+            } else if (dayOfWeek == 5) {
+                if (exAPI.extensionAPI.settings.get("adnp-Fri")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-Fri");
+                }
+            } else {
+                if (exAPI.extensionAPI.settings.get("adnp-Sat")) {
+                    templateUID = exAPI.extensionAPI.settings.get("adnp-Sat");
+                }
             }
         }
-    }
-
-    if (templateUID == undefined) {
-        alert("Make sure to set your template block references in Roam Depot settings!");
+    
+        if (templateUID == undefined) {
+            alert("Make sure to set your template block references in Roam Depot settings!");
+        } else {
+            templateUID = templateUID.replace('((', '');
+            templateUID = templateUID.replace('))', '');
+    
+            let query = `[:find ?block_string :where [?p :node/title "${pageTitle}"] [?p :block/children ?c] [?c :block/string ?block_string]]`;
+            let results = window.roamAlphaAPI.q(query);
+    
+            var parentBlockTextMatch = false;
+            let tree = getTreeByBlockUid(templateUID);
+            var parentBlockText = tree.children[0].text;
+            for (var i = 0; i < results.length; i++) {
+                if (results[i][0] == parentBlockText) {
+                    parentBlockTextMatch = true;
+                }
+            }
+            if (parentBlockTextMatch == false) {
+                await printTree(tree, pageUid);
+                setTomorrow(); // now that we've printed today's template, let's monitor for tomorrow
+            }
+        }
     } else {
-        templateUID = templateUID.replace('((', '');
-        templateUID = templateUID.replace('))', '');
-
-        let query = `[:find ?block_string :where [?p :node/title "${pageTitle}"] [?p :block/children ?c] [?c :block/string ?block_string]]`;
-        let results = window.roamAlphaAPI.q(query);
-
-        var parentBlockTextMatch = false;
-        let tree = getTreeByBlockUid(templateUID);
-        var parentBlockText = tree.children[0].text;
-        for (var i = 0; i < results.length; i++) {
-            if (results[i][0] == parentBlockText) {
-                parentBlockTextMatch = true;
-            }
-        }
-        if (parentBlockTextMatch == false) {
-            await printTree(tree, pageUid);
-            setTomorrow(); // now that we've printed today's template, let's monitor for tomorrow
-        }
+        alert("You can only trigger a daily note template on a daily note page or the log page!")
     }
 }
 
