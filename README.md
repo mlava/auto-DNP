@@ -3,6 +3,7 @@ Automatically paste in your preferred daily note page template when you open you
 This extension allows you to define templates for every day of the week, or for weekdays and weekends if you prefer to keep it simple.
 
 **New:**
+- respect open/close state, text-align state in templates
 - use a command palette or hotkey command to manually trigger the DNP template - Manually trigger this day's DNP template
   - this could be useful if you want to go to a future or past date and paste the correct template
   - another use would be if you delete the template from today's DNP and then want to start over
