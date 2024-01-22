@@ -239,7 +239,7 @@ async function printTree(tree, pageUid) {
             window.roamAlphaAPI.createBlock(
                 {
                     "location": { "parent-uid": pageUid, "order": order + tree.children[i].order },
-                    "block": { "string": blockText, uid: newerUid, open: true, "heading": tree.children[i].heading }
+                    "block": { "string": blockText, uid: newerUid, "open": tree.children[i].open, "heading": tree.children[i].heading, "text-align": tree.children[i].textAlign }
                 }
             );
             if (tree.children[i].hasOwnProperty('children') && tree.children[i].children.length > 0) {
@@ -281,7 +281,7 @@ function getTreeByBlockId(blockId) {
             .map((c) => getTreeByBlockId(c[":db/id"]))
             .sort((a, b) => a.order - b.order),
         heading: block[":block/heading"] || 0,
-        open: block[":block/open"] || true,
+        open: block[":block/open"],
         viewType: block[":children/view-type"]?.substring(1),
         editTime: new Date(block[":edit/time"] || 0),
         textAlign: block[":block/text-align"] || "left",
