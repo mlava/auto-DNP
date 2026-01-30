@@ -2,6 +2,7 @@ var adnpMode, templateUID;
 var monitorUID = undefined;
 var exAPI = undefined;
 var checkTomorrowInterval = 0;
+const ADNP_MARKER_KEY = "auto-dnp-template";
 
 export default {
     onload: async ({ extensionAPI }) => {
@@ -13,6 +14,12 @@ export default {
                     name: "Preferred Mode",
                     description: "Set templates by Daily or Weekday/Weekend settings",
                     action: { type: "select", items: ["Daily", "Weekday/Weekend"], onChange: (evt) => { setMode(evt); } },
+                },
+                {
+                    id: "adnp-insert-position",
+                    name: "Insert position",
+                    description: "Insert template at the top or bottom of the page",
+                    action: { type: "select", items: ["Bottom", "Top"] },
                 },
                 {
                     id: "adnp-Mon",
@@ -68,6 +75,12 @@ export default {
                     action: { type: "select", items: ["Daily", "Weekday/Weekend"], onChange: (evt) => { setMode(evt); } },
                 },
                 {
+                    id: "adnp-insert-position",
+                    name: "Insert position",
+                    description: "Insert template at the top or bottom of the page",
+                    action: { type: "select", items: ["Bottom", "Top"] },
+                },
+                {
                     id: "adnp-weekday",
                     name: "Weekday template",
                     description: "Block reference for template",
@@ -103,6 +116,7 @@ export default {
             window.roamAlphaAPI.data.addPullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction);
         } else {
             checkDNP(adnpMode, todayUID);
+            setTomorrow();
         }
 
         // onChange
@@ -119,36 +133,31 @@ export default {
         extensionAPI.ui.commandPalette.addCommand({
             label: "Manually trigger this day's DNP template",
             callback: async () => {
-                var pageUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
-                if (!pageUid) {
-                    var uri = window.location.href;
-                    const regex = /^https:\/\/(relemma-.+)?roamresearch.com\/(#\/(app|offline)\/\w+)?$/; //today's DNP
-                    let logPage = document.getElementById("rm-log-container");
-                    if (uri.match(regex) || logPage) {
-                        var today = new Date();
-                        var dd = String(today.getDate()).padStart(2, '0');
-                        var mm = String(today.getMonth() + 1).padStart(2, '0');
-                        var yyyy = today.getFullYear();
-                        pageUid = mm + '-' + dd + '-' + yyyy;
-                    }
-                }
+                var pageUid = await getCurrentPageUid();
                 if (pageUid) {
-                    checkDNP(adnpMode, pageUid);
+                    checkDNP(adnpMode, pageUid, { force: true });
                 }
             }
         });
     },
     onunload: () => {
-        window.roamAlphaAPI.data.removePullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction);
+        try {
+            if (monitorUID) {
+                window.roamAlphaAPI.data.removePullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction);
+            }
+        } catch (e) { }
+        try { if (checkTomorrowInterval > 0) clearTimeout(checkTomorrowInterval); } catch (e) { }
     }
 }
 
 function pullFunction(before, after) {
-    window.roamAlphaAPI.data.removePullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction);
+    try { window.roamAlphaAPI.data.removePullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction); } catch (e) { }
     checkDNP(adnpMode, monitorUID);
 }
 
-async function checkDNP(adnpMode, pageUid) {
+async function checkDNP(adnpMode, pageUid, options = {}) {
+    const forceInsert = options.force === true;
+    templateUID = undefined;
     var pageTitle = window.roamAlphaAPI.q(`[:find (pull ?p [:node/title]) :where [?p :block/uid "${pageUid}"]]`)?.[0]?.[0]?.title || "";
     var date = await window.roamAlphaAPI.util.pageTitleToDate(pageTitle);
     
@@ -207,30 +216,46 @@ async function checkDNP(adnpMode, pageUid) {
         } else {
             templateUID = templateUID.replace('((', '');
             templateUID = templateUID.replace('))', '');
-    
+
+            let marker = templateUID;
+            if (!forceInsert && await hasMarker(pageUid, marker)) {
+                return;
+            }
+
             let query = `[:find ?block_string :where [?p :node/title "${pageTitle}"] [?p :block/children ?c] [?c :block/string ?block_string]]`;
             let results = window.roamAlphaAPI.q(query);
-    
-            var parentBlockTextMatch = false;
+
             let tree = getTreeByBlockUid(templateUID);
-            var parentBlockText = tree.children[0].text;
-            for (var i = 0; i < results.length; i++) {
-                if (results[i][0] == parentBlockText) {
-                    parentBlockTextMatch = true;
+            if (!tree.uid && (!tree.children || tree.children.length === 0) && !tree.text) {
+                alert("Template block not found. Please verify the block reference in settings.");
+                return;
+            }
+            let parentBlockText = tree.children?.[0]?.text;
+            if (!forceInsert && parentBlockText) {
+                for (var i = 0; i < results.length; i++) {
+                    if (results[i][0] == parentBlockText) {
+                        await ensureMarker(pageUid, marker);
+                        return;
+                    }
                 }
             }
-            if (parentBlockTextMatch == false) {
-                await printTree(tree, pageUid);
-                setTomorrow(); // now that we've printed today's template, let's monitor for tomorrow
-            }
+
+            let insertPosition = exAPI.extensionAPI.settings.get("adnp-insert-position") || "Bottom";
+            await printTree(tree, pageUid, insertPosition);
+            await ensureMarker(pageUid, marker);
+            setTomorrow(); // now that we've printed today's template, let's monitor for tomorrow
         }
     } else {
         alert("You can only trigger a daily note template on a daily note page or the log page!")
     }
 }
 
-async function printTree(tree, pageUid) {
-    let order = await window.roamAlphaAPI.q(`[:find ?c :where [?e :block/children ?c] [?e :block/uid "${pageUid}"]]`)?.length;
+async function printTree(tree, pageUid, insertPosition = "Bottom") {
+    let childCount = await window.roamAlphaAPI.q(`[:find ?c :where [?e :block/children ?c] [?e :block/uid "${pageUid}"]]`)?.length;
+    if (childCount == null) {
+        childCount = 0;
+    }
+    let order = insertPosition === "Top" ? 0 : childCount;
 
     if (tree.hasOwnProperty('children') && tree.children.length > 0) {
         for (var i = 0; i < tree.children.length; i++) {
@@ -256,10 +281,11 @@ async function setTomorrow() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     var tomorrowUID = window.roamAlphaAPI.util.dateToPageUid(tomorrow);
 
-    try { if (checkTomorrowInterval > 0) clearInterval(checkTomorrowInterval) } catch (e) { }
-    checkTomorrowInterval = setInterval(async () => {
+    try { if (checkTomorrowInterval > 0) clearTimeout(checkTomorrowInterval) } catch (e) { }
+    checkTomorrowInterval = setTimeout(async () => {
         var page = window.roamAlphaAPI.q(` [:find ?e :where [?e :block/uid "${tomorrowUID}"]]`);
         if (page.length < 1) { // no DNP for tomorrow yet
+            try { if (monitorUID) window.roamAlphaAPI.data.removePullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction); } catch (e) { }
             monitorUID = tomorrowUID;
             window.roamAlphaAPI.data.addPullWatch("[:create/time]", `[:block/uid "${monitorUID}"]`, pullFunction);
         } else {
@@ -329,5 +355,112 @@ function getTreeByBlockUid(blockUid) {
     const blockId = window.roamAlphaAPI.q(
         `[:find ?e :where [?e :block/uid "${blockUid}"]]`
     )?.[0]?.[0];
+    if (!blockId) {
+        return {
+            text: "",
+            order: 0,
+            uid: "",
+            children: [],
+            heading: 0,
+            open: true,
+            viewType: "bullet",
+            editTime: new Date(0),
+            textAlign: "left",
+            props: {
+                imageResize: {},
+                iframe: {},
+            },
+        };
+    }
     return getTreeByBlockId(blockId);
 };
+
+async function ensureMarker(pageUid, marker) {
+    try {
+        let props = window.roamAlphaAPI.pull("[:block/props]", `[:block/uid "${pageUid}"]`)?.[":block/props"] || {};
+        let cleanedProps = normalizePropsForMarker(props);
+        if (cleanedProps[ADNP_MARKER_KEY] === marker) {
+            return;
+        }
+        let updateProps = normalizePropsForUpdate(cleanedProps);
+        window.roamAlphaAPI.updateBlock({
+            "block": {
+                "uid": pageUid,
+                "props": {
+                    ...updateProps,
+                    [ADNP_MARKER_KEY]: marker,
+                },
+            },
+        });
+    } catch (e) {
+        // marker failure should not block template insertion
+    }
+}
+
+async function hasMarker(pageUid, marker) {
+    try {
+        let props = window.roamAlphaAPI.pull("[:block/props]", `[:block/uid "${pageUid}"]`)?.[":block/props"] || {};
+        let cleanedProps = normalizePropsForMarker(props);
+        return cleanedProps[ADNP_MARKER_KEY] === marker;
+    } catch (e) {
+        return false;
+    }
+}
+
+function normalizePropsForMarker(props) {
+    let cleaned = { ...props };
+    let keyPattern = new RegExp(`^:+${ADNP_MARKER_KEY}$`);
+    for (let key of Object.keys(cleaned)) {
+        if (keyPattern.test(key)) {
+            delete cleaned[key];
+        }
+    }
+    return cleaned;
+}
+
+function normalizePropsForUpdate(props) {
+    let cleaned = {};
+    for (let key of Object.keys(props)) {
+        let normalizedKey = key.replace(/^:+/, "");
+        cleaned[normalizedKey] = props[key];
+    }
+    return cleaned;
+}
+
+async function getCurrentPageUid() {
+    let pageOrBlockUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
+    if (pageOrBlockUid) {
+        if (isPageUid(pageOrBlockUid)) {
+            return pageOrBlockUid;
+        }
+        let pageUid = getPageUidFromBlockUid(pageOrBlockUid);
+        if (pageUid) {
+            return pageUid;
+        }
+    }
+
+    // Log page: use top (today) roam-log-page entry
+    let logPageUid = getLogPageUidFromDom();
+    if (logPageUid) {
+        return logPageUid;
+    }
+
+    return null;
+}
+
+function isPageUid(uid) {
+    let page = window.roamAlphaAPI.q(`[:find ?e :where [?e :block/uid "${uid}"] [?e :node/title ?t]]`);
+    return page.length > 0;
+}
+
+function getPageUidFromBlockUid(blockUid) {
+    let page = window.roamAlphaAPI.q(
+        `[:find ?pageUid :where [?b :block/uid "${blockUid}"] [?b :block/page ?p] [?p :block/uid ?pageUid]]`
+    );
+    return page?.[0]?.[0] || null;
+}
+
+function getLogPageUidFromDom() {
+    let container = document.querySelector(".roam-log-page .rm-title-display-container[data-page-uid]");
+    return container?.getAttribute("data-page-uid") || null;
+}
